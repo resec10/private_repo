@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Expiry Tracker</title>
+  <meta name="description" content="Track product expiry dates and get a reminder 10 days before they expire.">
+  <meta name="theme-color" content="#1f7a4d">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Expiry">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></symbol>
+    <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></symbol>
+    <symbol id="i-bread" viewBox="0 0 24 24"><path d="M5 11.5A4 4 0 0 1 7 4h10a4 4 0 0 1 2 7.5V19a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1z"/><path d="M9 9v2M12 8v2M15 9v2"/></symbol>
+  </svg>
+
+  <header class="top">
+    <div class="top-inner">
+      <div>
+        <h1>Expiry Tracker</h1>
+        <p id="summary" class="summary"></p>
+      </div>
+      <button id="open-settings" class="icon-btn" type="button" aria-label="Settings">
+        <svg><use href="#i-settings"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div id="banner" class="banner" hidden>
+      <svg class="banner-icon"><use href="#i-bell"/></svg>
+      <p id="banner-text"></p>
+      <button id="banner-action" class="btn small" type="button" hidden></button>
+      <button id="banner-close" class="icon-btn small" type="button" aria-label="Dismiss" hidden>
+        <svg><use href="#i-close"/></svg>
+      </button>
+    </div>
+
+    <label class="search">
+      <svg><use href="#i-search"/></svg>
+      <input id="search" type="search" placeholder="Search products" autocomplete="off" aria-label="Search products">
+    </label>
+
+    <div id="list"></div>
+
+    <div id="empty" class="empty" hidden>
+      <p class="empty-title">No products yet</p>
+      <p>Tap <strong>Add product</strong> to save a name, expiry date and photo.</p>
+    </div>
+    <p id="no-match" class="empty" hidden>No products match your search.</p>
+  </main>
+
+  <button id="add" class="fab" type="button">
+    <svg><use href="#i-plus"/></svg><span>Add product</span>
+  </button>
+
+  <dialog id="editor" class="sheet" aria-labelledby="editor-title">
+    <form id="product-form" method="dialog" novalidate>
+      <div class="sheet-head">
+        <h2 id="editor-title">Add product</h2>
+        <button class="icon-btn" type="button" data-close aria-label="Close"><svg><use href="#i-close"/></svg></button>
+      </div>
+
+      <div class="photo-field">
+        <div id="photo-preview" class="photo-preview">
+          <svg><use href="#i-image"/></svg><span>No photo</span>
+        </div>
+        <div class="photo-actions">
+          <label class="btn ghost">
+            <svg><use href="#i-camera"/></svg> Take photo
+            <input id="photo-camera" type="file" accept="image/*" capture="environment" hidden>
+          </label>
+          <label class="btn ghost">
+            <svg><use href="#i-image"/></svg> Choose photo
+            <input id="photo-gallery" type="file" accept="image/*" hidden>
+          </label>
+          <button id="photo-remove" class="btn ghost danger-text" type="button" hidden>Remove photo</button>
+        </div>
+      </div>
+
+      <label class="field">
+        <span>Product name</span>
+        <input id="name" name="name" required maxlength="120" autocomplete="off" list="name-suggestions" placeholder="e.g. Whole milk 1L">
+        <datalist id="name-suggestions"></datalist>
+      </label>
+
+      <label class="field">
+        <span>Expiry date</span>
+        <input id="expiry" name="expiry" type="date" required>
+      </label>
+
+      <label class="switch-row">
+        <span>
+          <strong>Bread</strong>
+          <small>No alerts for bread. It only shows the expiry date.</small>
+        </span>
+        <input id="bread" name="bread" type="checkbox" role="switch">
+      </label>
+
+      <p id="form-error" class="form-error" role="alert" hidden></p>
+
+      <div class="sheet-actions">
+        <button id="delete" class="btn ghost danger-text" type="button" hidden>Delete</button>
+        <button id="save-copy" class="btn ghost" type="submit" value="copy" hidden>Save as new batch</button>
+        <button id="save" class="btn" type="submit" value="save">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="settings" class="sheet" aria-labelledby="settings-title">
+    <div class="sheet-head">
+      <h2 id="settings-title">Settings</h2>
+      <button class="icon-btn" type="button" data-close aria-label="Close"><svg><use href="#i-close"/></svg></button>
+    </div>
+
+    <section class="setting">
+      <h3>Alerts</h3>
+      <p id="alert-status"></p>
+      <button id="test-alert" class="btn ghost" type="button">Send an alert now</button>
+    </section>
+
+    <section class="setting">
+      <h3>Calendar reminders</h3>
+      <p>Adds each product (except bread) to your phone's calendar, with a reminder 10 days before and on the day. These work even when the app is closed, which is useful on iPhone.</p>
+      <button id="export-ics" class="btn ghost" type="button">Add reminders to calendar</button>
+    </section>
+
+    <section class="setting">
+      <h3>Backup</h3>
+      <p>Products and photos are saved only on this device. Make a backup to move them to another phone or keep them safe.</p>
+      <div class="row">
+        <button id="export-backup" class="btn ghost" type="button">Save backup file</button>
+        <label class="btn ghost">Restore backup<input id="import-backup" type="file" accept="application/json,.json" hidden></label>
+      </div>
+    </section>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden>
+    <span id="toast-text"></span>
+    <button id="toast-action" class="toast-action" type="button" hidden></button>
+  </div>
+
+  <script src="shared.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
