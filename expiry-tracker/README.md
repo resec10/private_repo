@@ -75,6 +75,7 @@ Photos are shrunk to 900 pixels before saving, so hundreds of products take only
 | `sw.js` | Service worker: offline cache, the background daily check, and opening the app from a notification |
 | `manifest.webmanifest`, `icons/` | What makes the app installable |
 | `tests/logic.test.mjs` | Unit tests for the date and alert rules |
+| `android/` | The Android app (APK) version, see below |
 
 ## Development
 
@@ -90,3 +91,60 @@ without https.
 The 10-day window is `ALERT_DAYS` in `shared.js`. After you deploy changes, phones pick them up
 the second time the app is opened, because the service worker serves the cached copy first and
 refreshes it in the background.
+If you change the 10-day window, also change `ALERT_DAYS` in
+`android/src/app/expirytracker/AlertLogic.java`.
+
+## Android app (APK)
+
+The `android/` folder packages the same web app as an installable Android app
+(`ExpiryTracker.apk`, about 150 KB, Android 7.0 or newer). It needs no web hosting.
+
+Differences from the browser version:
+
+- **Alerts:** these are real Android notifications. The app checks in the background every few
+  hours, so the daily summary arrives even if you haven't opened the app. It never arrives before
+  08:00 or after 21:00.
+- **Photos and backups:** *Take photo* opens the camera and *Choose photo* opens the gallery.
+  *Save backup file* opens Android's "Save to…" screen.
+- **No calendar export:** it isn't needed, because alerts work with the app closed.
+
+Everything else, including the bread rule, works the same, and the backup files are
+interchangeable. The app keeps its own data, separate from the browser version. To move data
+between them, save a backup in one and restore it in the other.
+
+### Install it
+
+1. Copy `ExpiryTracker.apk` to the phone, for example by emailing it to yourself, and tap it.
+2. If Android asks, allow your browser or file manager to *install unknown apps*.
+3. Google Play Protect may warn that the app is from an unknown developer. That's because it's
+   signed by you, not published on the Play Store. Tap *More details → Install anyway*.
+4. Open **Expiry Tracker**. On Android 13 and newer, tap **Turn on alerts** and allow notifications.
+
+### Build it
+
+```sh
+cd expiry-tracker/android
+python3 build.py      # -> build/ExpiryTracker.apk
+```
+
+The build needs Java 17+ and Python 3 with the `cryptography` package. It doesn't need Gradle,
+Android Studio or the Android SDK. The first build downloads its tools from Maven Central (about
+160 MB) and checks them against pinned SHA-256 hashes:
+
+- **Resource compiler:** `aapt2`, taken from apktool.
+- **Bytecode converter:** `dx`, which turns Java bytecode into Android bytecode.
+- **Android 14 framework classes:** from Robolectric.
+
+The build then signs the APK with Android's v2 signature scheme.
+
+Unit tests for the Android alert rules (the same cases as `tests/logic.test.mjs`):
+
+```sh
+javac --release 8 -Xlint:-options -d /tmp/alert-test src/app/expirytracker/AlertLogic.java tests/AlertLogicTest.java
+java -cp /tmp/alert-test app.expirytracker.AlertLogicTest
+```
+
+**Signing key:** the first build creates `android/signing/`, which git ignores. **Keep a copy of
+it.** Android only installs an update over the existing app if both are signed with the same key.
+With a different key you would have to uninstall first, which deletes the app's data; restore a
+backup afterwards. For each new release, raise `VERSION_CODE` in `build.py`.

@@ -15,6 +15,10 @@ const ui = {
   toast: $('#toast'), toastText: $('#toast-text'), toastAction: $('#toast-action'),
 };
 
+// Present when running inside the Android app (see android/), which provides notifications,
+// the background check and file saving natively.
+const native = window.ExpiryNative || null;
+
 let products = [];
 const photoUrls = new Map(); // product id -> { blob, url }
 const dateFmt = new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
@@ -28,18 +32,21 @@ let breadTouched = false;    // stop auto-suggesting once the user flips the swi
 init();
 
 async function init() {
-  if ('serviceWorker' in navigator) {
+  if (!native && 'serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch((err) => console.warn('Service worker not registered', err));
   }
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+  // the Android app alerts while closed, so calendar reminders aren't needed there
+  if (native) $('#calendar-setting').hidden = true;
   bindEvents();
   await reload();
   renderBanner();
-  if (alertsGranted()) registerBackgroundCheck();
+  if (!native && alertsGranted()) registerBackgroundCheck();
   await check();
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
       render();
+      renderBanner(); // the user may have changed notification settings meanwhile
       check();
     }
   });
@@ -54,6 +61,9 @@ async function init() {
 async function reload() {
   products = await store.allProducts();
   render();
+  if (native) {
+    native.syncProducts(JSON.stringify(products.map((p) => ({ name: p.name, expiry: p.expiry, bread: Boolean(p.bread) }))));
+  }
   const names = [...new Set(products.map((p) => p.name))].sort((a, b) => a.localeCompare(b));
   ui.suggestions.replaceChildren(...names.map((n) => Object.assign(document.createElement('option'), { value: n })));
 }
@@ -256,8 +266,14 @@ async function deleteProduct() {
 
 // ---------------------------------------------------------------- alerts
 
+/** 'granted' | 'default' (not asked yet) | 'denied' | 'unsupported' */
+function alertPermission() {
+  if (native) return native.permission();
+  return 'Notification' in window ? Notification.permission : 'unsupported';
+}
+
 function alertsGranted() {
-  return 'Notification' in window && Notification.permission === 'granted';
+  return alertPermission() === 'granted';
 }
 
 function isIos() {
@@ -269,22 +285,28 @@ function isInstalled() {
 }
 
 function renderBanner() {
+  const permission = alertPermission();
   let text = '';
   let action = null;
   let dismissKey = null;
-  if (!('Notification' in window)) {
+  if (permission === 'unsupported') {
     if (isIos() && !isInstalled()) {
       text = 'To get expiry alerts on iPhone, tap Share, then “Add to Home Screen”, and open the app from your home screen.';
     } else {
       text = 'This browser can’t show notifications. Products expiring soon are still listed at the top.';
     }
     dismissKey = 'dismissed-no-notifications';
-  } else if (Notification.permission === 'default') {
+  } else if (permission === 'default') {
     text = `Get a reminder when a product is ${ALERT_DAYS} days or less from expiring.`;
     action = { label: 'Turn on alerts', run: enableAlerts };
-  } else if (Notification.permission === 'denied') {
-    text = 'Alerts are blocked. Allow notifications for this app in your browser or phone settings to get reminders.';
-    dismissKey = 'dismissed-denied';
+  } else if (permission === 'denied') {
+    if (native) {
+      text = 'Alerts are off for this app. Turn on notifications to get reminders.';
+      action = { label: 'Open settings', run: () => native.openSettings() };
+    } else {
+      text = 'Alerts are blocked. Allow notifications for this app in your browser or phone settings to get reminders.';
+      dismissKey = 'dismissed-denied';
+    }
   }
   let dismissed = false;
   try { dismissed = Boolean(dismissKey && localStorage.getItem(dismissKey)); } catch (_) { /* storage blocked */ }
@@ -303,12 +325,28 @@ function renderBanner() {
   };
 }
 
+function requestAlertPermission() {
+  if (!native) return Notification.requestPermission();
+  return new Promise((resolve) => {
+    window.__nativePermissionResult = (state) => {
+      window.__nativePermissionResult = null;
+      resolve(state);
+    };
+    native.requestPermission();
+  });
+}
+
 async function enableAlerts() {
-  const result = await Notification.requestPermission();
+  const result = await requestAlertPermission();
   renderBanner();
   if (result !== 'granted') return;
-  registerBackgroundCheck();
-  const shown = await runDailyCheck(await notifier(), { force: true });
+  let shown;
+  if (native) {
+    shown = native.checkNow(true);
+  } else {
+    registerBackgroundCheck();
+    shown = await runDailyCheck(await notifier(), { force: true });
+  }
   toast(shown ? 'Alerts are on. You’ll get one reminder a day while products are close to expiring.'
     : `Alerts are on. You’ll get a reminder once a product is ${ALERT_DAYS} days from expiring.`);
 }
@@ -337,45 +375,64 @@ async function registerBackgroundCheck() {
 
 async function check() {
   try {
-    await runDailyCheck(await notifier());
+    if (native) native.checkNow(false);
+    else await runDailyCheck(await notifier());
   } catch (err) {
     console.warn('Expiry check failed', err);
   }
 }
 
 async function sendAlertNow() {
-  if (!alertsGranted()) {
-    if ('Notification' in window && Notification.permission === 'default') return enableAlerts();
-    return toast('Notifications aren’t allowed for this app yet.');
-  }
-  const n = await notifier();
-  const shown = await runDailyCheck(n, { force: true });
-  if (!shown) {
-    await n.showNotification('Expiry alerts are on', {
-      body: `Nothing expires in the next ${ALERT_DAYS} days.`, tag: 'expiry-alert', icon: 'icons/icon-192.png',
-    });
+  const permission = alertPermission();
+  if (permission === 'default') return enableAlerts();
+  if (permission === 'denied' && native) return native.openSettings();
+  if (permission !== 'granted') return toast('Notifications aren’t allowed for this app yet.');
+  if (native) {
+    native.sendAlertNow();
+  } else {
+    const n = await notifier();
+    const shown = await runDailyCheck(n, { force: true });
+    if (!shown) {
+      await n.showNotification('Expiry alerts are on', {
+        body: `Nothing expires in the next ${ALERT_DAYS} days.`, tag: 'expiry-alert', icon: 'icons/icon-192.png',
+      });
+    }
   }
   toast('Alert sent.');
 }
 
 function renderAlertStatus() {
+  const permission = alertPermission();
   let text;
-  if (!('Notification' in window)) {
+  let button = 'Send an alert now';
+  if (permission === 'unsupported') {
     text = isIos() && !isInstalled()
       ? 'On iPhone, alerts work after you add this app to your Home Screen (Share → Add to Home Screen).'
       : 'This browser can’t show notifications.';
-  } else if (Notification.permission === 'granted') {
+  } else if (permission === 'granted') {
     text = `On. You get one summary a day for products ${ALERT_DAYS} days or less from expiring (bread excluded). `
-      + 'Android phones can send it with the app closed. Other phones send it when you open the app, so use calendar reminders below too.';
-  } else if (Notification.permission === 'denied') {
-    text = 'Blocked. Allow notifications for this app in your browser or phone settings.';
+      + (native ? 'It arrives even when the app is closed, after 8:00 in the morning.'
+        : 'Android phones can send it with the app closed. Other phones send it when you open the app, so use calendar reminders below too.');
+  } else if (permission === 'denied') {
+    text = native ? 'Off. Notifications are turned off for this app.'
+      : 'Blocked. Allow notifications for this app in your browser or phone settings.';
+    button = 'Open notification settings';
   } else {
     text = 'Off. Tap the button to turn them on.';
+    button = 'Turn on alerts';
   }
   ui.alertStatus.textContent = text;
-  ui.testAlert.textContent = 'Notification' in window && Notification.permission === 'default' ? 'Turn on alerts' : 'Send an alert now';
-  ui.testAlert.hidden = !('Notification' in window) || Notification.permission === 'denied';
+  ui.testAlert.textContent = button;
+  ui.testAlert.hidden = permission === 'unsupported' || (permission === 'denied' && !native);
 }
+
+/** Android back button: close an open sheet first. Returns whether something was closed. */
+window.__handleBack = () => {
+  const open = document.querySelector('dialog[open]');
+  if (!open) return false;
+  open.close();
+  return true;
+};
 
 // ---------------------------------------------------------------- backup & calendar
 
@@ -388,7 +445,13 @@ function blobToDataUrl(blob) {
   });
 }
 
-function download(filename, blob) {
+async function download(filename, blob) {
+  if (native) {
+    // the Android app opens its "Save to…" screen and confirms itself
+    const dataUrl = await blobToDataUrl(blob);
+    native.saveFile(filename, blob.type || 'application/octet-stream', dataUrl.slice(dataUrl.indexOf(',') + 1));
+    return;
+  }
   const url = URL.createObjectURL(blob);
   const a = el('a', { href: url, download: filename });
   document.body.append(a);
@@ -401,8 +464,8 @@ async function exportBackup() {
   if (!products.length) return toast('There’s nothing to back up yet.');
   const items = await Promise.all(products.map(async (p) => ({ ...p, photo: p.photo ? await blobToDataUrl(p.photo) : null })));
   const data = { app: 'expiry-tracker', version: 1, exportedAt: new Date().toISOString(), products: items };
-  download(`expiry-backup-${isoDate()}.json`, new Blob([JSON.stringify(data)], { type: 'application/json' }));
-  toast(`Backup saved (${products.length} product${products.length === 1 ? '' : 's'}).`);
+  await download(`expiry-backup-${isoDate()}.json`, new Blob([JSON.stringify(data)], { type: 'application/json' }));
+  if (!native) toast(`Backup saved (${products.length} product${products.length === 1 ? '' : 's'}).`);
 }
 
 async function importBackup(file) {

@@ -1,0 +1,5 @@
+# downloaded build tools, build output
+.tools/
+build/
+# the signing key: keep a private copy, never commit it
+signing/
