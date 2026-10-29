@@ -143,7 +143,7 @@ public class MainActivity extends Activity {
             startActivityForResult(intent, request);
             return true;
         } catch (ActivityNotFoundException e) {
-            Toast.makeText(this, image ? R.string.no_camera : R.string.no_picker, Toast.LENGTH_LONG).show();
+            toast(image ? "noCamera" : "noPicker");
             return false;
         }
     }
@@ -158,7 +158,7 @@ public class MainActivity extends Activity {
             startActivityForResult(intent, REQ_SAVE);
         } catch (ActivityNotFoundException e) {
             pendingSave = null;
-            Toast.makeText(this, R.string.save_failed, Toast.LENGTH_LONG).show();
+            toast("saveFailed");
         }
     }
 
@@ -171,9 +171,9 @@ public class MainActivity extends Activity {
             out = getContentResolver().openOutputStream(target);
             if (out == null) throw new IOException("no output stream");
             out.write(data);
-            Toast.makeText(this, R.string.saved, Toast.LENGTH_SHORT).show();
+            toast("saved");
         } catch (IOException e) {
-            Toast.makeText(this, R.string.save_failed, Toast.LENGTH_LONG).show();
+            toast("saveFailed");
         } finally {
             if (out != null) {
                 try {
@@ -265,6 +265,11 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
+        public void setLanguage(String lang) {
+            DailyCheck.saveLanguage(MainActivity.this, lang);
+        }
+
+        @JavascriptInterface
         public boolean checkNow(boolean force) {
             return DailyCheck.run(MainActivity.this, force, false);
         }
@@ -273,7 +278,9 @@ public class MainActivity extends Activity {
         public boolean sendAlertNow() {
             if (DailyCheck.run(MainActivity.this, true, false)) return true;
             if (!DailyCheck.notificationsAllowed(MainActivity.this)) return false;
-            Notifier.show(MainActivity.this, getString(R.string.test_title), getString(R.string.test_body));
+            String lang = DailyCheck.language(MainActivity.this);
+            Notifier.show(MainActivity.this, Texts.t(lang, "testTitle"),
+                    Texts.t(lang, "summaryNone", "days", Texts.plural(lang, "days", AlertLogic.ALERT_DAYS)) + ".");
             return true;
         }
 
@@ -333,6 +340,10 @@ public class MainActivity extends Activity {
             }
             return true;
         }
+    }
+
+    private void toast(String key) {
+        Toast.makeText(this, Texts.t(DailyCheck.language(this), key), Toast.LENGTH_LONG).show();
     }
 
     static String mimeType(String path) {

@@ -36,6 +36,15 @@ final class DailyCheck {
         prefs(c).edit().putString("products", json).apply();
     }
 
+    /** The language the web app shows (en/ro/ru); notifications use it too. */
+    static void saveLanguage(Context c, String lang) {
+        prefs(c).edit().putString("lang", Texts.normalize(lang)).apply();
+    }
+
+    static String language(Context c) {
+        return Texts.normalize(prefs(c).getString("lang", null));
+    }
+
     static List<AlertLogic.Product> loadProducts(Context c) {
         List<AlertLogic.Product> out = new ArrayList<AlertLogic.Product>();
         try {
@@ -76,7 +85,7 @@ final class DailyCheck {
             if (hour < 8 || hour >= 21) return false;
         }
         p.edit().putString("lastAlertDay", today).apply();
-        AlertLogic.Summary s = AlertLogic.summarize(loadProducts(c), today);
+        AlertLogic.Summary s = AlertLogic.summarize(loadProducts(c), today, language(c));
         if (s == null) return false;
         Notifier.show(c, s.title, s.body);
         return true;

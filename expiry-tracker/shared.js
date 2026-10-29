@@ -1,4 +1,4 @@
-/* Shared by the page (app.js) and the service worker (sw.js).
+/* Shared by the page (app.js) and the service worker (sw.js). Needs i18n.js loaded first.
    Plain script, not a module, so the worker can load it with importScripts() on every browser. */
 
 const ALERT_DAYS = 10;
@@ -69,12 +69,13 @@ function needsAlert(product, today = isoDate()) {
   return !product.bread && daysUntil(product.expiry, today) <= ALERT_DAYS;
 }
 
-function describeDays(days) {
-  if (days < -1) return `expired ${-days} days ago`;
-  if (days === -1) return 'expired yesterday';
-  if (days === 0) return 'expires today';
-  if (days === 1) return 'expires tomorrow';
-  return `expires in ${days} days`;
+/** "expires in 5 days", "expired yesterday"… in the current (or given) language; see i18n.js. */
+function describeDays(days, lang = currentLang) {
+  if (days < -1) return t('expiredAgo', { days: t('days', { n: -days }, lang) }, lang);
+  if (days === -1) return t('expiredYesterday', {}, lang);
+  if (days === 0) return t('expiresToday', {}, lang);
+  if (days === 1) return t('expiresTomorrow', {}, lang);
+  return t('expiresIn', { days: t('days', { n: days }, lang) }, lang);
 }
 
 // ---------------------------------------------------------------- bread detection
@@ -82,8 +83,13 @@ function describeDays(days) {
 // Only a suggestion for the "Bread" switch; the user can always change it.
 const BREAD_WORDS = [
   'bread', 'breads', 'loaf', 'loaves', 'baguette', 'baguettes', 'ciabatta', 'focaccia',
-  'pane', 'panino', 'panini', 'pain', 'pâine', 'paine', 'franzelă', 'franzela',
-  'brot', 'brötchen', 'chleb',
+  'pane', 'panino', 'panini', 'pain', 'brot', 'brötchen', 'chleb',
+  // Romanian
+  'pâine', 'paine', 'pâini', 'paini', 'franzelă', 'franzela', 'baghetă', 'bagheta', 'baghete',
+  'lipie', 'lipii', 'chiflă', 'chifla', 'chifle',
+  // Russian
+  'хлеб', 'батон', 'багет', 'буханка', 'лаваш', 'чиабатта', 'фокачча', 'булка', 'булочка',
+  'булочки', 'лепёшка', 'лепешка',
 ];
 const BREAD_RE = new RegExp(`(^|[^\\p{L}])(${BREAD_WORDS.join('|')})(?=$|[^\\p{L}])`, 'iu');
 
@@ -94,18 +100,26 @@ function looksLikeBread(name) {
 // ---------------------------------------------------------------- daily alert
 
 /** Notification text for everything that needs attention today, or null if nothing does. */
-function alertSummary(products, today = isoDate()) {
+function alertSummary(products, today = isoDate(), lang = currentLang) {
   const due = products
     .filter((p) => needsAlert(p, today))
     .map((p) => ({ name: p.name, days: daysUntil(p.expiry, today) }))
     .sort((a, b) => a.days - b.days || a.name.localeCompare(b.name));
   if (!due.length) return null;
   if (due.length === 1) {
-    return { title: `${due[0].name} ${describeDays(due[0].days)}`, body: 'Tap to open Expiry Tracker.', count: 1 };
+    const title = t('alertTitleOne', { name: due[0].name, desc: describeDays(due[0].days, lang) }, lang);
+    return { title, body: t('tapToOpen', {}, lang), count: 1 };
   }
-  const lines = due.slice(0, 6).map((d) => `${d.name}: ${describeDays(d.days)}`);
-  if (due.length > 6) lines.push(`+ ${due.length - 6} more`);
-  return { title: `${due.length} products expire within ${ALERT_DAYS} days`, body: lines.join('\n'), count: due.length };
+  const lines = due.slice(0, 6).map((d) => t('alertLine', { name: d.name, desc: describeDays(d.days, lang) }, lang));
+  if (due.length > 6) lines.push(t('alertMore', { n: due.length - 6 }, lang));
+  const title = t('expiringCount', { n: due.length, days: t('days', { n: ALERT_DAYS }, lang) }, lang);
+  return { title, body: lines.join('\n'), count: due.length };
+}
+
+/** The language chosen in Settings ("auto" or unset means the phone's language). */
+async function effectiveLang() {
+  const chosen = await store.getMeta('lang');
+  return chosen && chosen in LANGUAGES ? chosen : detectLang();
 }
 
 async function updateBadge(count) {
@@ -125,7 +139,7 @@ async function updateBadge(count) {
  */
 async function runDailyCheck(notifier, { force = false } = {}) {
   const today = isoDate();
-  const summary = alertSummary(await store.allProducts(), today);
+  const summary = alertSummary(await store.allProducts(), today, await effectiveLang());
   await updateBadge(summary ? summary.count : 0);
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return null;
   if (!force && (await store.getMeta('lastAlertDay')) === today) return null;

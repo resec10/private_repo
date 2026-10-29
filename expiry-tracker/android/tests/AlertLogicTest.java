@@ -37,28 +37,61 @@ public final class AlertLogicTest {
         eq(AlertLogic.needsAlert(p("a", "2026-10-26", true), today), false, "bread never");
         eq(AlertLogic.needsAlert(p("a", "2026-10-20", true), today), false, "expired bread never");
 
-        eq(AlertLogic.describeDays(5), "expires in 5 days", "wording 5");
-        eq(AlertLogic.describeDays(1), "expires tomorrow", "wording 1");
-        eq(AlertLogic.describeDays(0), "expires today", "wording 0");
-        eq(AlertLogic.describeDays(-1), "expired yesterday", "wording -1");
-        eq(AlertLogic.describeDays(-3), "expired 3 days ago", "wording -3");
+        eq(AlertLogic.describeDays(5, "en"), "expires in 5 days", "wording 5");
+        eq(AlertLogic.describeDays(1, "en"), "expires tomorrow", "wording 1");
+        eq(AlertLogic.describeDays(0, "en"), "expires today", "wording 0");
+        eq(AlertLogic.describeDays(-1, "en"), "expired yesterday", "wording -1");
+        eq(AlertLogic.describeDays(-3, "en"), "expired 3 days ago", "wording -3");
 
         List<AlertLogic.Product> products = Arrays.asList(
                 p("Cheese", "2026-12-01", false), p("Milk", "2026-10-30", false),
                 p("Yogurt", "2026-10-24", false), p("Pane", "2026-10-26", true),
                 p("Broken", "not-a-date", false));
-        AlertLogic.Summary s = AlertLogic.summarize(products, today);
+        AlertLogic.Summary s = AlertLogic.summarize(products, today, "en");
         eq(s.count, 2, "summary count");
         eq(s.title, "2 products expire within 10 days", "summary title");
         eq(s.body, "Yogurt: expired yesterday\nMilk: expires in 5 days", "summary body");
-        eq(AlertLogic.summarize(Arrays.asList(products.get(0), products.get(3)), today), null, "nothing due");
-        eq(AlertLogic.summarize(Arrays.asList(products.get(1)), today).title, "Milk expires in 5 days", "single title");
+        eq(AlertLogic.summarize(Arrays.asList(products.get(0), products.get(3)), today, "en"), null, "nothing due");
+        eq(AlertLogic.summarize(Arrays.asList(products.get(1)), today, "en").title, "Milk expires in 5 days", "single title");
 
         List<AlertLogic.Product> many = new ArrayList<AlertLogic.Product>();
         for (int i = 0; i < 9; i++) many.add(p("P" + i, "2026-10-27", false));
-        String body = AlertLogic.summarize(many, today).body;
+        String body = AlertLogic.summarize(many, today, "en").body;
         eq(body.split("\n").length, 7, "capped at six names plus a 'more' line");
         eq(body.endsWith("+ 3 more"), true, "more line");
+
+        // Romanian and Russian: same expectations as tests/logic.test.mjs
+        eq(AlertLogic.describeDays(1, "ro"), "expiră mâine", "ro tomorrow");
+        eq(AlertLogic.describeDays(0, "ro"), "expiră azi", "ro today");
+        eq(AlertLogic.describeDays(5, "ro"), "expiră în 5 zile", "ro 5");
+        eq(AlertLogic.describeDays(20, "ro"), "expiră în 20 de zile", "ro 20");
+        eq(AlertLogic.describeDays(101, "ro"), "expiră în 101 zile", "ro 101");
+        eq(AlertLogic.describeDays(-1, "ro"), "a expirat ieri", "ro yesterday");
+        eq(AlertLogic.describeDays(-3, "ro"), "a expirat acum 3 zile", "ro -3");
+        eq(AlertLogic.describeDays(-25, "ro"), "a expirat acum 25 de zile", "ro -25");
+        eq(AlertLogic.describeDays(1, "ru"), "истекает завтра", "ru tomorrow");
+        eq(AlertLogic.describeDays(0, "ru"), "истекает сегодня", "ru today");
+        eq(AlertLogic.describeDays(2, "ru"), "истекает через 2 дня", "ru 2");
+        eq(AlertLogic.describeDays(5, "ru"), "истекает через 5 дней", "ru 5");
+        eq(AlertLogic.describeDays(11, "ru"), "истекает через 11 дней", "ru 11");
+        eq(AlertLogic.describeDays(21, "ru"), "истекает через 21 день", "ru 21");
+        eq(AlertLogic.describeDays(-1, "ru"), "истёк вчера", "ru yesterday");
+        eq(AlertLogic.describeDays(-3, "ru"), "истёк 3 дня назад", "ru -3");
+
+        List<AlertLogic.Product> ro = Arrays.asList(p("Lapte", "2026-10-30", false), p("Iaurt", "2026-10-24", false),
+                p("Pâine", "2026-10-26", true));
+        AlertLogic.Summary sro = AlertLogic.summarize(ro, today, "ro");
+        eq(sro.title, "2 produse expiră în următoarele 10 zile", "ro title");
+        eq(sro.body, "Iaurt: a expirat ieri\nLapte: expiră în 5 zile", "ro body");
+        eq(AlertLogic.summarize(Arrays.asList(ro.get(0)), today, "ro").title, "Lapte: expiră în 5 zile", "ro single");
+        List<AlertLogic.Product> ru = Arrays.asList(p("Молоко", "2026-10-30", false), p("Кефир", "2026-10-24", false));
+        AlertLogic.Summary sru = AlertLogic.summarize(ru, today, "ru");
+        eq(sru.title, "2 товара: срок истекает в течение 10 дней", "ru title");
+        eq(sru.body, "Кефир: истёк вчера\nМолоко: истекает через 5 дней", "ru body");
+        eq(AlertLogic.summarize(many, today, "ru").body.endsWith("+ ещё 3"), true, "ru more");
+        eq(AlertLogic.summarize(many, today, "ro").body.endsWith("+ încă 3"), true, "ro more");
+        eq(AlertLogic.summarize(many, today, "ru").title, "9 товаров: срок истекает в течение 10 дней", "ru 9");
+        eq(AlertLogic.describeDays(5, "xx"), "expires in 5 days", "unknown language falls back to English");
 
         System.out.println("AlertLogicTest: all " + passed + " checks passed");
     }

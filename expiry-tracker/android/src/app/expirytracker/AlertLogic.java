@@ -71,16 +71,16 @@ final class AlertLogic {
         return !p.bread && daysUntil(p.expiry, today) <= ALERT_DAYS;
     }
 
-    static String describeDays(int days) {
-        if (days < -1) return "expired " + (-days) + " days ago";
-        if (days == -1) return "expired yesterday";
-        if (days == 0) return "expires today";
-        if (days == 1) return "expires tomorrow";
-        return "expires in " + days + " days";
+    static String describeDays(int days, String lang) {
+        if (days < -1) return Texts.t(lang, "expiredAgo", "days", Texts.plural(lang, "days", -days));
+        if (days == -1) return Texts.t(lang, "expiredYesterday");
+        if (days == 0) return Texts.t(lang, "expiresToday");
+        if (days == 1) return Texts.t(lang, "expiresTomorrow");
+        return Texts.t(lang, "expiresIn", "days", Texts.plural(lang, "days", days));
     }
 
-    /** Notification text for today, or null when nothing needs attention. */
-    static Summary summarize(List<Product> products, final String today) {
+    /** Notification text for today in `lang` (en/ro/ru), or null when nothing needs attention. */
+    static Summary summarize(List<Product> products, final String today, String lang) {
         List<Product> due = new ArrayList<Product>();
         for (Product p : products) {
             if (isIsoDate(p.expiry) && needsAlert(p, today)) due.add(p);
@@ -96,15 +96,17 @@ final class AlertLogic {
         });
         if (due.size() == 1) {
             Product p = due.get(0);
-            return new Summary(p.name + " " + describeDays(daysUntil(p.expiry, today)), "Tap to open Expiry Tracker.", 1);
+            String title = Texts.t(lang, "alertTitleOne", "name", p.name, "desc", describeDays(daysUntil(p.expiry, today), lang));
+            return new Summary(title, Texts.t(lang, "tapToOpen"), 1);
         }
         StringBuilder body = new StringBuilder();
         for (int i = 0; i < due.size() && i < 6; i++) {
             Product p = due.get(i);
             if (i > 0) body.append('\n');
-            body.append(p.name).append(": ").append(describeDays(daysUntil(p.expiry, today)));
+            body.append(Texts.t(lang, "alertLine", "name", p.name, "desc", describeDays(daysUntil(p.expiry, today), lang)));
         }
-        if (due.size() > 6) body.append("\n+ ").append(due.size() - 6).append(" more");
-        return new Summary(due.size() + " products expire within " + ALERT_DAYS + " days", body.toString(), due.size());
+        if (due.size() > 6) body.append('\n').append(Texts.t(lang, "alertMore", "n", String.valueOf(due.size() - 6)));
+        String title = Texts.plural(lang, "expiringCount", due.size(), "days", Texts.plural(lang, "days", ALERT_DAYS));
+        return new Summary(title, body.toString(), due.size());
     }
 }

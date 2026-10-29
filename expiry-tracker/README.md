@@ -11,6 +11,8 @@ installed on the home screen. It works offline, and there's no account, server o
   "bread", "baguette", "focaccia"…), and you can always change it.
 - **The list:** products are grouped into *Expiring within 10 days*, *Bread* and *Later*,
   soonest first, and you can search them by name.
+- **Languages:** English, Romanian (Română) and Russian (Русский). The app uses the phone's
+  language, and you can change it in **Settings → Language**. Notifications use the same language.
 - **Changing products:** tap a product to edit it or delete it (with Undo). Use
   **Save as new batch** for a new delivery of the same product: it keeps the name and photo,
   and you just set the new date.
@@ -71,6 +73,7 @@ Photos are shrunk to 900 pixels before saving, so hundreds of products take only
 |------|--------------|
 | `index.html`, `styles.css` | The page and its design. Mobile-first, with light and dark mode. |
 | `app.js` | The list, the add/edit form, photos, backup and calendar export |
+| `i18n.js` | All the text, in English, Romanian and Russian, with each language's plural rules |
 | `shared.js` | Storage (IndexedDB), date maths, bread detection and the daily alert. Used by both `app.js` and `sw.js`. |
 | `sw.js` | Service worker: offline cache, the background daily check, and opening the app from a notification |
 | `manifest.webmanifest`, `icons/` | What makes the app installable |
@@ -93,6 +96,11 @@ the second time the app is opened, because the service worker serves the cached 
 refreshes it in the background.
 If you change the 10-day window, also change `ALERT_DAYS` in
 `android/src/app/expirytracker/AlertLogic.java`.
+
+To change any wording, edit `i18n.js`. The Android app sends its background notifications from
+its own copy of those notification texts, in `android/src/app/expirytracker/Texts.java`, so change
+them in both places. The unit tests check that every text exists in all three languages and that
+the Android notification wording matches.
 
 ## Android app (APK)
 

@@ -1,9 +1,9 @@
 /* Service worker: offline support, background expiry checks, and notification clicks. */
-importScripts('shared.js');
+importScripts('i18n.js', 'shared.js');
 
-const CACHE = 'expiry-tracker-v1';
+const CACHE = 'expiry-tracker-v2';
 const ASSETS = [
-  './', 'index.html', 'styles.css', 'shared.js', 'app.js', 'manifest.webmanifest',
+  './', 'index.html', 'styles.css', 'i18n.js', 'shared.js', 'app.js', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png',
   'icons/apple-touch-icon.png', 'icons/badge-96.png',
 ];

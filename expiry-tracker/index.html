@@ -29,10 +29,10 @@
   <header class="top">
     <div class="top-inner">
       <div>
-        <h1>Expiry Tracker</h1>
+        <h1 data-i18n="appTitle">Expiry Tracker</h1>
         <p id="summary" class="summary"></p>
       </div>
-      <button id="open-settings" class="icon-btn" type="button" aria-label="Settings">
+      <button id="open-settings" class="icon-btn" type="button" aria-label="Settings" data-i18n-aria-label="settings">
         <svg><use href="#i-settings"/></svg>
       </button>
     </div>
@@ -43,68 +43,68 @@
       <svg class="banner-icon"><use href="#i-bell"/></svg>
       <p id="banner-text"></p>
       <button id="banner-action" class="btn small" type="button" hidden></button>
-      <button id="banner-close" class="icon-btn small" type="button" aria-label="Dismiss" hidden>
+      <button id="banner-close" class="icon-btn small" type="button" aria-label="Dismiss" data-i18n-aria-label="dismiss" hidden>
         <svg><use href="#i-close"/></svg>
       </button>
     </div>
 
     <label class="search">
       <svg><use href="#i-search"/></svg>
-      <input id="search" type="search" placeholder="Search products" autocomplete="off" aria-label="Search products">
+      <input id="search" type="search" placeholder="Search products" autocomplete="off" aria-label="Search products" data-i18n-placeholder="searchPlaceholder" data-i18n-aria-label="searchPlaceholder">
     </label>
 
     <div id="list"></div>
 
     <div id="empty" class="empty" hidden>
-      <p class="empty-title">No products yet</p>
-      <p>Tap <strong>Add product</strong> to save a name, expiry date and photo.</p>
+      <p class="empty-title" data-i18n="emptyTitle">No products yet</p>
+      <p data-i18n="emptyHint">Tap “Add product” to save a name, expiry date and photo.</p>
     </div>
-    <p id="no-match" class="empty" hidden>No products match your search.</p>
+    <p id="no-match" class="empty" data-i18n="noMatch" hidden>No products match your search.</p>
   </main>
 
   <button id="add" class="fab" type="button">
-    <svg><use href="#i-plus"/></svg><span>Add product</span>
+    <svg><use href="#i-plus"/></svg><span data-i18n="addProduct">Add product</span>
   </button>
 
   <dialog id="editor" class="sheet" aria-labelledby="editor-title">
     <form id="product-form" method="dialog" novalidate>
       <div class="sheet-head">
         <h2 id="editor-title">Add product</h2>
-        <button class="icon-btn" type="button" data-close aria-label="Close"><svg><use href="#i-close"/></svg></button>
+        <button class="icon-btn" type="button" data-close aria-label="Close" data-i18n-aria-label="close"><svg><use href="#i-close"/></svg></button>
       </div>
 
       <div class="photo-field">
         <div id="photo-preview" class="photo-preview">
-          <svg><use href="#i-image"/></svg><span>No photo</span>
+          <svg><use href="#i-image"/></svg><span data-i18n="noPhoto">No photo</span>
         </div>
         <div class="photo-actions">
           <label class="btn ghost">
-            <svg><use href="#i-camera"/></svg> Take photo
+            <svg><use href="#i-camera"/></svg> <span data-i18n="takePhoto">Take photo</span>
             <input id="photo-camera" type="file" accept="image/*" capture="environment" hidden>
           </label>
           <label class="btn ghost">
-            <svg><use href="#i-image"/></svg> Choose photo
+            <svg><use href="#i-image"/></svg> <span data-i18n="choosePhoto">Choose photo</span>
             <input id="photo-gallery" type="file" accept="image/*" hidden>
           </label>
-          <button id="photo-remove" class="btn ghost danger-text" type="button" hidden>Remove photo</button>
+          <button id="photo-remove" class="btn ghost danger-text" type="button" data-i18n="removePhoto" hidden>Remove photo</button>
         </div>
       </div>
 
       <label class="field">
-        <span>Product name</span>
-        <input id="name" name="name" required maxlength="120" autocomplete="off" list="name-suggestions" placeholder="e.g. Whole milk 1L">
+        <span data-i18n="productName">Product name</span>
+        <input id="name" name="name" required maxlength="120" autocomplete="off" list="name-suggestions" placeholder="e.g. Whole milk 1L" data-i18n-placeholder="namePlaceholder">
         <datalist id="name-suggestions"></datalist>
       </label>
 
       <label class="field">
-        <span>Expiry date</span>
+        <span data-i18n="expiryDate">Expiry date</span>
         <input id="expiry" name="expiry" type="date" required>
       </label>
 
       <label class="switch-row">
         <span>
-          <strong>Bread</strong>
-          <small>No alerts for bread. It only shows the expiry date.</small>
+          <strong data-i18n="bread">Bread</strong>
+          <small data-i18n="breadHint">No alerts for bread. It only shows the expiry date.</small>
         </span>
         <input id="bread" name="bread" type="checkbox" role="switch">
       </label>
@@ -112,37 +112,47 @@
       <p id="form-error" class="form-error" role="alert" hidden></p>
 
       <div class="sheet-actions">
-        <button id="delete" class="btn ghost danger-text" type="button" hidden>Delete</button>
-        <button id="save-copy" class="btn ghost" type="submit" value="copy" hidden>Save as new batch</button>
-        <button id="save" class="btn" type="submit" value="save">Save</button>
+        <button id="delete" class="btn ghost danger-text" type="button" data-i18n="delete" hidden>Delete</button>
+        <button id="save-copy" class="btn ghost" type="submit" value="copy" data-i18n="saveAsNewBatch" hidden>Save as new batch</button>
+        <button id="save" class="btn" type="submit" value="save" data-i18n="save">Save</button>
       </div>
     </form>
   </dialog>
 
   <dialog id="settings" class="sheet" aria-labelledby="settings-title">
     <div class="sheet-head">
-      <h2 id="settings-title">Settings</h2>
-      <button class="icon-btn" type="button" data-close aria-label="Close"><svg><use href="#i-close"/></svg></button>
+      <h2 id="settings-title" data-i18n="settings">Settings</h2>
+      <button class="icon-btn" type="button" data-close aria-label="Close" data-i18n-aria-label="close"><svg><use href="#i-close"/></svg></button>
     </div>
 
     <section class="setting">
-      <h3>Alerts</h3>
-      <p id="alert-status"></p>
-      <button id="test-alert" class="btn ghost" type="button">Send an alert now</button>
-    </section>
-
-    <section id="calendar-setting" class="setting">
-      <h3>Calendar reminders</h3>
-      <p>Adds each product (except bread) to your phone's calendar, with a reminder 10 days before and on the day. These work even when the app is closed, which is useful on iPhone.</p>
-      <button id="export-ics" class="btn ghost" type="button">Add reminders to calendar</button>
+      <h3 data-i18n="languageHeading">Language</h3>
+      <select id="language" class="select" aria-label="Language" data-i18n-aria-label="languageHeading">
+        <option value="auto" data-i18n="languageAuto">Phone language</option>
+        <option value="en" lang="en">English</option>
+        <option value="ro" lang="ro">Română</option>
+        <option value="ru" lang="ru">Русский</option>
+      </select>
     </section>
 
     <section class="setting">
-      <h3>Backup</h3>
-      <p>Products and photos are saved only on this device. Make a backup to move them to another phone or keep them safe.</p>
+      <h3 data-i18n="alertsHeading">Alerts</h3>
+      <p id="alert-status"></p>
+      <button id="test-alert" class="btn ghost" type="button" data-i18n="sendAlertNow">Send an alert now</button>
+    </section>
+
+    <section id="calendar-setting" class="setting">
+      <h3 data-i18n="calendarHeading">Calendar reminders</h3>
+      <p data-i18n="calendarText">Adds each product (except bread) to your phone’s calendar, with a reminder 10 days before and on the day. These work even when the app is closed, which is useful on iPhone.</p>
+      <button id="export-ics" class="btn ghost" type="button" data-i18n="calendarButton">Add reminders to calendar</button>
+    </section>
+
+    <section class="setting">
+      <h3 data-i18n="backupHeading">Backup</h3>
+      <p data-i18n="backupText">Products and photos are saved only on this device. Make a backup to move them to another phone or keep them safe.</p>
       <div class="row">
-        <button id="export-backup" class="btn ghost" type="button">Save backup file</button>
-        <label class="btn ghost">Restore backup<input id="import-backup" type="file" accept="application/json,.json" hidden></label>
+        <button id="export-backup" class="btn ghost" type="button" data-i18n="saveBackup">Save backup file</button>
+        <label class="btn ghost"><span data-i18n="restoreBackup">Restore backup</span><input id="import-backup" type="file" accept="application/json,.json" hidden></label>
       </div>
     </section>
   </dialog>
@@ -152,6 +162,7 @@
     <button id="toast-action" class="toast-action" type="button" hidden></button>
   </div>
 
+  <script src="i18n.js"></script>
   <script src="shared.js"></script>
   <script src="app.js"></script>
 </body>

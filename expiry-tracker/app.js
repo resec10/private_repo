@@ -12,6 +12,7 @@ const ui = {
   formError: $('#form-error'), del: $('#delete'), saveCopy: $('#save-copy'),
   settings: $('#settings'), openSettings: $('#open-settings'), alertStatus: $('#alert-status'), testAlert: $('#test-alert'),
   exportIcs: $('#export-ics'), exportBackup: $('#export-backup'), importBackup: $('#import-backup'),
+  language: $('#language'),
   toast: $('#toast'), toastText: $('#toast-text'), toastAction: $('#toast-action'),
 };
 
@@ -21,8 +22,7 @@ const native = window.ExpiryNative || null;
 
 let products = [];
 const photoUrls = new Map(); // product id -> { blob, url }
-const dateFmt = new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
-const dateFmtYear = new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+const dateFormats = new Map(); // "lang|withYear" -> Intl.DateTimeFormat
 
 // editor state
 let editing = null;          // product being edited, or null when adding
@@ -38,6 +38,7 @@ async function init() {
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
   // the Android app alerts while closed, so calendar reminders aren't needed there
   if (native) $('#calendar-setting').hidden = true;
+  await applyLanguage((await store.getMeta('lang')) || 'auto');
   bindEvents();
   await reload();
   renderBanner();
@@ -79,11 +80,11 @@ function render() {
   const q = ui.search.value.trim().toLocaleLowerCase();
   const shown = products
     .filter((p) => !q || p.name.toLocaleLowerCase().includes(q))
-    .sort((a, b) => a.expiry.localeCompare(b.expiry) || a.name.localeCompare(b.name));
+    .sort((a, b) => a.expiry.localeCompare(b.expiry) || a.name.localeCompare(b.name, currentLang));
   const groups = [
-    { title: `Expiring within ${ALERT_DAYS} days`, cls: 'soon', items: shown.filter((p) => needsAlert(p, today)) },
-    { title: 'Bread', cls: 'bread', items: shown.filter((p) => p.bread) },
-    { title: 'Later', cls: 'later', items: shown.filter((p) => !p.bread && !needsAlert(p, today)) },
+    { title: t('groupSoon', { days: t('days', { n: ALERT_DAYS }) }), cls: 'soon', items: shown.filter((p) => needsAlert(p, today)) },
+    { title: t('groupBread'), cls: 'bread', items: shown.filter((p) => p.bread) },
+    { title: t('groupLater'), cls: 'later', items: shown.filter((p) => !p.bread && !needsAlert(p, today)) },
   ].filter((g) => g.items.length);
 
   ui.list.replaceChildren(...groups.map((g) => {
@@ -102,8 +103,9 @@ function render() {
   ui.noMatch.hidden = !(products.length && !shown.length);
 
   const due = products.filter((p) => needsAlert(p, today)).length;
-  ui.summary.textContent = !products.length ? 'Add your first product'
-    : due ? `${due} expiring within ${ALERT_DAYS} days` : `Nothing expires in the next ${ALERT_DAYS} days`;
+  const window10 = t('days', { n: ALERT_DAYS });
+  ui.summary.textContent = !products.length ? t('summaryEmpty')
+    : due ? t('expiringCount', { n: due, days: window10 }) : t('summaryNone', { days: window10 });
 }
 
 function card(p, today) {
@@ -124,11 +126,11 @@ function card(p, today) {
   if (p.bread) {
     const tag = el('span', { class: 'tag' });
     tag.innerHTML = '<svg><use href="#i-bread"/></svg>';
-    tag.append('Bread · no alerts');
+    tag.append(t('breadTag'));
     meta.append(tag);
   }
   const info = el('span', { class: 'info' });
-  info.append(el('span', { class: 'name' }, p.name), el('span', { class: 'date' }, `Expires ${formatDate(p.expiry)}`), meta);
+  info.append(el('span', { class: 'name' }, p.name), el('span', { class: 'date' }, t('expiresOn', { date: formatDate(p.expiry) })), meta);
 
   btn.append(thumb, info);
   return btn;
@@ -158,7 +160,7 @@ function openEditor(product = null) {
   breadTouched = Boolean(product);
   ui.form.reset();
   ui.formError.hidden = true;
-  ui.editorTitle.textContent = product ? 'Edit product' : 'Add product';
+  ui.editorTitle.textContent = product ? t('editProduct') : t('addProduct');
   ui.name.value = product ? product.name : '';
   ui.expiry.value = product ? product.expiry : '';
   ui.bread.checked = product ? Boolean(product.bread) : false;
@@ -175,9 +177,10 @@ function showPreview(blob) {
   previewUrl = null;
   if (blob) {
     previewUrl = URL.createObjectURL(blob);
-    ui.preview.replaceChildren(el('img', { src: previewUrl, alt: 'Product photo' }));
+    ui.preview.replaceChildren(el('img', { src: previewUrl, alt: t('productPhoto') }));
   } else {
-    ui.preview.innerHTML = '<svg><use href="#i-image"/></svg><span>No photo</span>';
+    ui.preview.innerHTML = '<svg><use href="#i-image"/></svg>';
+    ui.preview.append(el('span', {}, t('noPhoto')));
   }
   ui.removePhoto.hidden = !blob;
 }
@@ -191,7 +194,7 @@ async function onPhotoChosen(input) {
     showPreview(pendingPhoto);
   } catch (err) {
     console.warn(err);
-    toast('That photo could not be opened. Try another one.');
+    toast(t('photoError'));
   }
 }
 
@@ -230,7 +233,7 @@ async function saveProduct(asNewBatch) {
   const name = ui.name.value.trim();
   const expiry = ui.expiry.value;
   if (!name || !/^\d{4}-\d{2}-\d{2}$/.test(expiry)) {
-    ui.formError.textContent = !name ? 'Type the product name.' : 'Pick the expiry date.';
+    ui.formError.textContent = !name ? t('errorName') : t('errorDate');
     ui.formError.hidden = false;
     (!name ? ui.name : ui.expiry).focus();
     return;
@@ -248,8 +251,8 @@ async function saveProduct(asNewBatch) {
   await store.putProduct(product);
   ui.editor.close();
   await reload();
-  const days = daysUntil(expiry);
-  toast(`Saved. ${name} ${describeDays(days)}${needsAlert(product) ? '.' : ` (${formatDate(expiry)}).`}`);
+  const desc = describeDays(daysUntil(expiry));
+  toast(needsAlert(product) ? t('savedSoon', { name, desc }) : t('savedLater', { name, desc, date: formatDate(expiry) }));
 }
 
 async function deleteProduct() {
@@ -258,7 +261,7 @@ async function deleteProduct() {
   await store.deleteProduct(removed.id);
   forgetPhoto(removed.id);
   await reload();
-  toast(`Deleted ${removed.name}.`, 'Undo', async () => {
+  toast(t('deleted', { name: removed.name }), t('undo'), async () => {
     await store.putProduct(removed);
     await reload();
   });
@@ -291,20 +294,20 @@ function renderBanner() {
   let dismissKey = null;
   if (permission === 'unsupported') {
     if (isIos() && !isInstalled()) {
-      text = 'To get expiry alerts on iPhone, tap Share, then “Add to Home Screen”, and open the app from your home screen.';
+      text = t('bannerIosInstall');
     } else {
-      text = 'This browser can’t show notifications. Products expiring soon are still listed at the top.';
+      text = t('bannerNoNotifications');
     }
     dismissKey = 'dismissed-no-notifications';
   } else if (permission === 'default') {
-    text = `Get a reminder when a product is ${ALERT_DAYS} days or less from expiring.`;
-    action = { label: 'Turn on alerts', run: enableAlerts };
+    text = t('bannerAsk', { days: t('days', { n: ALERT_DAYS }) });
+    action = { label: t('turnOnAlerts'), run: enableAlerts };
   } else if (permission === 'denied') {
     if (native) {
-      text = 'Alerts are off for this app. Turn on notifications to get reminders.';
-      action = { label: 'Open settings', run: () => native.openSettings() };
+      text = t('bannerNativeOff');
+      action = { label: t('openSettings'), run: () => native.openSettings() };
     } else {
-      text = 'Alerts are blocked. Allow notifications for this app in your browser or phone settings to get reminders.';
+      text = t('bannerBlocked');
       dismissKey = 'dismissed-denied';
     }
   }
@@ -347,8 +350,7 @@ async function enableAlerts() {
     registerBackgroundCheck();
     shown = await runDailyCheck(await notifier(), { force: true });
   }
-  toast(shown ? 'Alerts are on. You’ll get one reminder a day while products are close to expiring.'
-    : `Alerts are on. You’ll get a reminder once a product is ${ALERT_DAYS} days from expiring.`);
+  toast(shown ? t('alertsOnWithSummary') : t('alertsOnNothing', { days: t('days', { n: ALERT_DAYS }) }));
 }
 
 /** Something with showNotification(): the service worker if available, else plain Notification. */
@@ -386,40 +388,35 @@ async function sendAlertNow() {
   const permission = alertPermission();
   if (permission === 'default') return enableAlerts();
   if (permission === 'denied' && native) return native.openSettings();
-  if (permission !== 'granted') return toast('Notifications aren’t allowed for this app yet.');
+  if (permission !== 'granted') return toast(t('notAllowed'));
   if (native) {
     native.sendAlertNow();
   } else {
     const n = await notifier();
     const shown = await runDailyCheck(n, { force: true });
     if (!shown) {
-      await n.showNotification('Expiry alerts are on', {
-        body: `Nothing expires in the next ${ALERT_DAYS} days.`, tag: 'expiry-alert', icon: 'icons/icon-192.png',
+      await n.showNotification(t('testTitle'), {
+        body: `${t('summaryNone', { days: t('days', { n: ALERT_DAYS }) })}.`, tag: 'expiry-alert', icon: 'icons/icon-192.png',
       });
     }
   }
-  toast('Alert sent.');
+  toast(t('alertSent'));
 }
 
 function renderAlertStatus() {
   const permission = alertPermission();
   let text;
-  let button = 'Send an alert now';
+  let button = t('sendAlertNow');
   if (permission === 'unsupported') {
-    text = isIos() && !isInstalled()
-      ? 'On iPhone, alerts work after you add this app to your Home Screen (Share → Add to Home Screen).'
-      : 'This browser can’t show notifications.';
+    text = isIos() && !isInstalled() ? t('statusIosInstall') : t('statusUnsupported');
   } else if (permission === 'granted') {
-    text = `On. You get one summary a day for products ${ALERT_DAYS} days or less from expiring (bread excluded). `
-      + (native ? 'It arrives even when the app is closed, after 8:00 in the morning.'
-        : 'Android phones can send it with the app closed. Other phones send it when you open the app, so use calendar reminders below too.');
+    text = `${t('statusOn', { days: t('days', { n: ALERT_DAYS }) })} ${native ? t('statusOnNative') : t('statusOnWeb')}`;
   } else if (permission === 'denied') {
-    text = native ? 'Off. Notifications are turned off for this app.'
-      : 'Blocked. Allow notifications for this app in your browser or phone settings.';
-    button = 'Open notification settings';
+    text = native ? t('statusOffNative') : t('statusBlocked');
+    button = t('openNotificationSettings');
   } else {
-    text = 'Off. Tap the button to turn them on.';
-    button = 'Turn on alerts';
+    text = t('statusOff');
+    button = t('turnOnAlerts');
   }
   ui.alertStatus.textContent = text;
   ui.testAlert.textContent = button;
@@ -461,11 +458,11 @@ async function download(filename, blob) {
 }
 
 async function exportBackup() {
-  if (!products.length) return toast('There’s nothing to back up yet.');
+  if (!products.length) return toast(t('nothingToBackup'));
   const items = await Promise.all(products.map(async (p) => ({ ...p, photo: p.photo ? await blobToDataUrl(p.photo) : null })));
   const data = { app: 'expiry-tracker', version: 1, exportedAt: new Date().toISOString(), products: items };
   await download(`expiry-backup-${isoDate()}.json`, new Blob([JSON.stringify(data)], { type: 'application/json' }));
-  if (!native) toast(`Backup saved (${products.length} product${products.length === 1 ? '' : 's'}).`);
+  if (!native) toast(t('backupSaved', { products: t('products', { n: products.length }) }));
 }
 
 async function importBackup(file) {
@@ -473,10 +470,10 @@ async function importBackup(file) {
   try {
     data = JSON.parse(await file.text());
   } catch (_) {
-    return toast('That file isn’t a valid backup.');
+    return toast(t('invalidBackup'));
   }
   if (!data || data.app !== 'expiry-tracker' || !Array.isArray(data.products)) {
-    return toast('That file isn’t an Expiry Tracker backup.');
+    return toast(t('notOurBackup'));
   }
   let count = 0;
   for (const p of data.products) {
@@ -498,7 +495,7 @@ async function importBackup(file) {
   }
   await reload();
   ui.settings.close();
-  toast(`Restored ${count} product${count === 1 ? '' : 's'}.`);
+  toast(t('restored', { products: t('products', { n: count }) }));
 }
 
 function icsText(s) {
@@ -530,7 +527,7 @@ function nextDay(iso) {
 
 function exportCalendar() {
   const items = products.filter((p) => !p.bread && daysUntil(p.expiry) >= 0);
-  if (!items.length) return toast('No upcoming products to add. Bread is left out on purpose.');
+  if (!items.length) return toast(t('noCalendarItems'));
   const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
   const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Expiry Tracker//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH'];
   for (const p of items) {
@@ -540,18 +537,18 @@ function exportCalendar() {
       `DTSTAMP:${stamp}`,
       `DTSTART;VALUE=DATE:${p.expiry.replace(/-/g, '')}`,
       `DTEND;VALUE=DATE:${nextDay(p.expiry).replace(/-/g, '')}`,
-      `SUMMARY:${icsText(`${p.name} expires`)}`,
+      `SUMMARY:${icsText(t('icsSummary', { name: p.name }))}`,
       'TRANSP:TRANSPARENT',
       // 09:00 ten days before (the all-day event starts at 00:00 on the expiry date)
-      'BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${icsText(`${p.name} expires in ${ALERT_DAYS} days`)}`,
+      'BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${icsText(t('icsAlarmBefore', { name: p.name, days: t('days', { n: ALERT_DAYS }) }))}`,
       `TRIGGER:-P${ALERT_DAYS - 1}DT15H`, 'END:VALARM',
-      'BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${icsText(`${p.name} expires today`)}`, 'TRIGGER:PT9H', 'END:VALARM',
+      'BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${icsText(t('icsAlarmToday', { name: p.name }))}`, 'TRIGGER:PT9H', 'END:VALARM',
       'END:VEVENT',
     );
   }
   lines.push('END:VCALENDAR');
   download('expiry-reminders.ics', new Blob([`${lines.map(icsFold).join('\r\n')}\r\n`], { type: 'text/calendar' }));
-  toast(`Calendar file with ${items.length} reminder${items.length === 1 ? '' : 's'} saved. Open it to add them.`);
+  toast(t('calendarSaved', { reminders: t('reminders', { n: items.length * 2 }) }));
 }
 
 // ---------------------------------------------------------------- helpers
@@ -565,7 +562,14 @@ function el(tag, attrs = {}, text) {
 
 function formatDate(iso) {
   const [y, m, d] = iso.split('-').map(Number);
-  return (y === new Date().getFullYear() ? dateFmt : dateFmtYear).format(new Date(y, m - 1, d));
+  const withYear = y !== new Date().getFullYear();
+  const key = `${currentLang}|${withYear}`;
+  if (!dateFormats.has(key)) {
+    dateFormats.set(key, new Intl.DateTimeFormat(currentLang, {
+      weekday: 'short', day: 'numeric', month: 'short', ...(withYear ? { year: 'numeric' } : {}),
+    }));
+  }
+  return dateFormats.get(key).format(new Date(y, m - 1, d));
 }
 
 function capitalize(s) {
@@ -581,6 +585,20 @@ function toast(message, actionLabel, action) {
   ui.toast.hidden = false;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { ui.toast.hidden = true; }, actionLabel ? 7000 : 4000);
+}
+
+// ---------------------------------------------------------------- language
+
+/** chosen: "auto" (follow the phone) or a code from LANGUAGES (i18n.js). */
+async function applyLanguage(chosen) {
+  setLang(chosen in LANGUAGES ? chosen : detectLang());
+  ui.language.value = chosen in LANGUAGES ? chosen : 'auto';
+  document.documentElement.lang = currentLang;
+  document.title = t('appTitle');
+  for (const node of document.querySelectorAll('[data-i18n]')) node.textContent = t(node.dataset.i18n);
+  for (const node of document.querySelectorAll('[data-i18n-placeholder]')) node.placeholder = t(node.dataset.i18nPlaceholder);
+  for (const node of document.querySelectorAll('[data-i18n-aria-label]')) node.setAttribute('aria-label', t(node.dataset.i18nAriaLabel));
+  if (native) native.setLanguage(currentLang); // background notifications use the same language
 }
 
 // ---------------------------------------------------------------- events
@@ -616,6 +634,13 @@ function bindEvents() {
   });
   ui.testAlert.addEventListener('click', async () => {
     await sendAlertNow();
+    renderAlertStatus();
+  });
+  ui.language.addEventListener('change', async () => {
+    await store.setMeta('lang', ui.language.value);
+    await applyLanguage(ui.language.value);
+    render();
+    renderBanner();
     renderAlertStatus();
   });
   ui.exportIcs.addEventListener('click', exportCalendar);

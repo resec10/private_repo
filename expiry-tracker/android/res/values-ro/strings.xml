@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Valabilitate</string>
+    <string name="channel_name">Alerte de expirare</string>
+    <string name="channel_description">Un memento pe zi pentru produsele cărora le mai rămân 10 zile sau mai puțin până la expirare</string>
+</resources>

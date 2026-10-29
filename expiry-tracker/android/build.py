@@ -20,8 +20,8 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-VERSION_CODE = 1
-VERSION_NAME = "1.0"
+VERSION_CODE = 2
+VERSION_NAME = "1.1"
 MIN_SDK = 24      # Android 7.0
 TARGET_SDK = 34   # Android 14
 
@@ -30,7 +30,7 @@ WEB = HERE.parent
 TOOLS = HERE / ".tools"
 BUILD = HERE / "build"
 SIGNING = HERE / "signing"
-WEB_FILES = ["index.html", "styles.css", "app.js", "shared.js", "sw.js", "manifest.webmanifest", "icons"]
+WEB_FILES = ["index.html", "styles.css", "app.js", "i18n.js", "shared.js", "sw.js", "manifest.webmanifest", "icons"]
 
 MAVEN = "https://repo1.maven.org/maven2/"
 DOWNLOADS = {
